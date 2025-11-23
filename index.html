@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NYC Geo-Predictor: Taxi Challenge</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
+
+    <style>
+        /* --- GENERAL CSS --- */
+        :root {
+            --bg-color: #222;
+            --panel-bg: rgba(255, 255, 255, 0.95);
+            --text-color: #333;
+            --accent-color: #e67e22;
+        }
+
+        body.light-mode {
+            --bg-color: #f0f0f0;
+            --panel-bg: rgba(255, 255, 255, 0.95);
+            --text-color: #000;
+            --accent-color: #d35400;
+        }
+
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; font-family: 'Poppins', sans-serif; }
+        #game-container { position: relative; width: 100vw; height: 100vh; background-color: var(--bg-color); }
+        #map-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; }
+        
+        /* --- START SCREEN (OVERLAY) --- */
+        #start-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 5000;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            color: white; text-align: center;
+        }
+        #start-screen h1 { font-size: 48px; margin-bottom: 10px; color: #f1c40f; text-transform: uppercase; letter-spacing: 2px; }
+        #start-screen p { font-size: 18px; max-width: 600px; margin-bottom: 30px; line-height: 1.6; color: #ddd; }
+        
+        #start-btn {
+            background: #28a745; color: white; border: none; padding: 15px 40px;
+            font-size: 24px; font-weight: bold; border-radius: 50px; cursor: pointer;
+            box-shadow: 0 0 20px rgba(40, 167, 69, 0.6); transition: transform 0.2s;
+            font-family: 'Poppins', sans-serif;
+        }
+        #start-btn:hover { transform: scale(1.1); background: #218838; }
+
+        /* --- CONTROL PANEL --- */
+        #control-panel {
+            position: absolute; top: 20px; right: 20px; width: 240px;
+            background: var(--panel-bg); padding: 20px;
+            border-radius: 15px; box-shadow: 0 8px 20px rgba(0,0,0,0.3); 
+            z-index: 1000; transition: all 0.3s ease;
+        }
+        .panel-item { font-size: 18px; font-weight: 700; margin-bottom: 8px; color: var(--text-color); }
+        #timer { color: #d9534f; font-size: 28px; }
+        #score { color: #0275d8; font-size: 28px; }
+        
+        /* --- THEME BUTTON --- */
+        #theme-btn {
+            position: absolute; top: 20px; left: 60px; z-index: 1000;
+            background: var(--panel-bg); border: none; padding: 10px 15px;
+            border-radius: 8px; cursor: pointer; font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3); font-family: 'Poppins', sans-serif;
+        }
+
+        /* --- TASK BAR --- */
+        #task-area {
+            position: absolute; bottom: 0; left: 0; width: 100%;
+            background: linear-gradient(to right, #111, #333); color: white;
+            text-align: center; padding: 20px; font-size: 18px; z-index: 1000;
+            border-top: 5px solid #f1c40f;
+        }
+        
+        /* --- FEEDBACK POPUP --- */
+        #feedback {
+            position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%);
+            background: #28a745; color: white; padding: 15px 40px;
+            border-radius: 50px; font-weight: 800; font-size: 24px;
+            display: none; z-index: 2000; text-align: center; border: 3px solid white;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="map-container"></div>
+        
+        <div id="start-screen">
+            <h1>NYC Geo-Predictor</h1>
+            <p>
+                Can you predict the taxi density?<br>
+                You have 60 seconds. Click on the red (high density) zones,<br>
+                score points, and survive through Morning, Noon, and Evening rush hours!
+            </p>
+            <button id="start-btn" onclick="startGameClick()">START GAME ▶</button>
+        </div>
+
+        <button id="theme-btn" onclick="toggleTheme()">☀️ Light Mode</button>
+
+        <div id="control-panel">
+            <div class="panel-item">SCORE: <span id="score">0</span></div>
+            <div class="panel-item">TIME: <span id="timer">60</span></div>
+            <hr style="border: 1px solid #ddd; margin: 10px 0;">
+            <div class="panel-item" id="level-display" style="font-size:16px; color:var(--accent-color);">Level 1</div>
+            <div class="panel-item" id="current-task" style="font-size:14px; color:#777;">Waiting...</div>
+        </div>
+
+        <div id="task-area">
+            <p id="task-text">Map is Loading...</p>
+        </div>
+
+        <div id="feedback">CORRECT!</div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/deck.gl@8.6.0/dist.min.js"></script>
+    <script src="https://unpkg.com/deck.gl-leaflet@1.2.0/dist/deck.gl-leaflet.min.js"></script>
+
+    <script>
+        // ================= DATASETS =================
+        const REAL_DATASETS = {
+            morning: [
+                [-74.009, 40.705], [-74.011, 40.706], [-74.008, 40.704], // Wall St
+                [-73.993, 40.750], [-73.992, 40.751], [-73.994, 40.749]  // Penn St
+            ],
+            noon: [
+                [-73.970, 40.764], [-73.965, 40.770], [-73.963, 40.775], // Central Park
+                [-73.977, 40.752], [-73.976, 40.753] // Grand Central
+            ],
+            evening: [
+                [-73.985, 40.758], [-73.986, 40.757], [-73.984, 40.759], // Times Sq
+                [-74.004, 40.742], [-74.006, 40.740] // Chelsea
+            ]
+        };
+
+        function generateDataFromSource(sourceArray) {
+            let result = [];
+            sourceArray.forEach(coord => {
+                for(let i=0; i<60; i++) {
+                    result.push({
+                        position: [
+                            coord[0] + (Math.random() - 0.5) * 0.008,
+                            coord[1] + (Math.random() - 0.5) * 0.008
+                        ]
+                    });
+                }
+            });
+            return result;
+        }
+
+        // ================= GAME LOGIC =================
+        
+        let score = 0;
+        let timeLeft = 60;
+        let timerInterval = null;
+        let currentLevel = 0;
+        let dayCount = 1;
+        let deckLayer = null;
+        let feedbackTimeout = null;
+        let map = null;
+        let tileLayer = null;
+        let isDarkMode = true;
+        let isGameRunning = false;
+
+        // ENGLISH SCENARIOS
+        const SCENARIOS = [
+            { id: 'morning', name: "08:30 (Morning Rush)", desc: "Financial District (South) or Penn Station!" },
+            { id: 'noon', name: "13:00 (Lunch Break)", desc: "Central Park (North) or Grand Central!" },
+            { id: 'evening', name: "20:00 (Night Life)", desc: "Times Square (Center) or Chelsea!" }
+        ];
+
+        window.onload = () => {
+            map = L.map('map-container').setView([40.750, -73.980], 12);
+            tileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '© CARTO', maxZoom: 19
+            }).addTo(map);
+
+            initDeckLayer(map);
+        };
+
+        function startGameClick() {
+            document.getElementById('start-screen').style.display = 'none';
+            startGame();
+        }
+
+        function toggleTheme() {
+            const btn = document.getElementById('theme-btn');
+            const body = document.body;
+            if (isDarkMode) {
+                body.classList.add('light-mode');
+                btn.innerText = "🌙 Dark Mode";
+                tileLayer.setUrl('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png');
+                isDarkMode = false;
+            } else {
+                body.classList.remove('light-mode');
+                btn.innerText = "☀️ Light Mode";
+                tileLayer.setUrl('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png');
+                isDarkMode = true;
+            }
+        }
+
+        function initDeckLayer(map) {
+            try {
+                const LayerClass = deck.LeafletLayer || window.DeckGlLeaflet.LeafletLayer;
+                deckLayer = new LayerClass({ layers: [] });
+                map.addLayer(deckLayer);
+            } catch(e) {}
+        }
+
+        function updateMap(scenarioId) {
+            const sourceData = REAL_DATASETS[scenarioId];
+            const processedData = generateDataFromSource(sourceData);
+
+            const newLayer = new deck.GridLayer({
+                id: 'grid-layer',
+                data: processedData,
+                pickable: true,
+                cellSize: 200, 
+                getPosition: d => d.position,
+                colorRange: [
+                    [44, 123, 182], [171, 217, 233], [255, 255, 191], 
+                    [253, 174, 97], [215, 25, 28]
+                ],
+                onClick: ({object}) => {
+                    if (isGameRunning && object) {
+                        if (object.count > 2) {
+                            handleCorrectGuess(object.count);
+                        } else {
+                            handleWrongGuess();
+                        }
+                    }
+                }
+            });
+            deckLayer.setProps({ layers: [newLayer] });
+        }
+
+        function startGame() {
+            isGameRunning = true;
+            score = 0;
+            timeLeft = 60;
+            currentLevel = 0;
+            dayCount = 1;
+            document.getElementById('score').innerText = "0";
+            loadLevel(0);
+
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                document.getElementById('timer').innerText = timeLeft;
+                if (timeLeft <= 0) endGame();
+            }, 1000);
+        }
+
+        function loadLevel(index) {
+            const scenario = SCENARIOS[index];
+            document.getElementById('level-display').innerText = `Day ${dayCount} - Level ${index + 1}`;
+            document.getElementById('current-task').innerText = scenario.name;
+            document.getElementById('task-text').innerText = `TASK: ${scenario.desc}`;
+            updateMap(scenario.id);
+        }
+
+        function handleCorrectGuess(density) {
+            const points = density * 2;
+            score += points;
+            document.getElementById('score').innerText = score;
+            showFeedback(`GREAT! +${points}`, "green");
+
+            if (score > (200 * dayCount) && currentLevel === 0) {
+                currentLevel = 1;
+                showFeedback("LUNCH TIME REACHED! (LEVEL 2)", "blue");
+                loadLevel(1);
+            } else if (score > (450 * dayCount) && currentLevel === 1) {
+                currentLevel = 2;
+                showFeedback("EVENING RUSH! (LEVEL 3)", "blue");
+                loadLevel(2);
+            } else if (score > (750 * dayCount) && currentLevel === 2) {
+                currentLevel = 0;
+                dayCount++;
+                showFeedback(`DAY ENDED! DAY ${dayCount} STARTING!`, "gold");
+                loadLevel(0);
+            }
+        }
+
+        function handleWrongGuess() {
+            score -= 20;
+            document.getElementById('score').innerText = score;
+            showFeedback("WRONG ZONE! -20", "red");
+        }
+
+        function showFeedback(text, color) {
+            const el = document.getElementById('feedback');
+            el.innerText = text;
+            
+            if (color === "gold") {
+                el.style.backgroundColor = "#f1c40f";
+                el.style.color = "#000";
+            } else {
+                el.style.backgroundColor = color === "green" ? "#28a745" : (color === "blue" ? "#007bff" : "#dc3545");
+                el.style.color = "white";
+            }
+            el.style.display = "block";
+
+            if (feedbackTimeout) clearTimeout(feedbackTimeout);
+            feedbackTimeout = setTimeout(() => {
+                el.style.display = "none";
+            }, 3000);
+        }
+
+        function endGame() {
+            isGameRunning = false;
+            clearInterval(timerInterval);
+            const startScreen = document.getElementById('start-screen');
+            startScreen.querySelector('h1').innerText = "GAME OVER!";
+            startScreen.querySelector('p').innerHTML = `Total Score: <b style="font-size:24px; color:#f1c40f">${score}</b><br>Do you want to try again?`;
+            startScreen.querySelector('button').innerText = "PLAY AGAIN ↺";
+            startScreen.style.display = 'flex';
+        }
+    </script>
+</body>
+</html>
