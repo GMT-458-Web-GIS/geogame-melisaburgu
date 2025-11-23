@@ -2,7 +2,7 @@
 
 
 
-🚕 GMT 458 - GeoGame: NYC Geo-Predictor
+🚕 GMT 458 - GeoGame: NYC Geo-Predictor: Taxi Challenge
 
 🗓️ Design Of the GeoGame
 
