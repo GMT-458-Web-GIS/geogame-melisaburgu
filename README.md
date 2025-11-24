@@ -64,6 +64,21 @@ The layout is designed to be intuitive, prioritizing the map interface.
 
 
 
+🎮 Gameplay Mechanics & Instructions
+
+1.	**Start the Game:** Click the **"START GAME"** button on the overlay screen to begin the simulation.
+
+2.	**Objective:** Analyze the map and click on the **Red/Orange/Yellow zones** representing high taxi density areas to score points.
+
+3.	**Day Cycle Progression:** As you score points, the game advances through realistic traffic scenarios: **Morning Rush -> Lunch Break -> Evening Rush**.
+
+4.	**Infinite Loop (Day 2+):** The game simulates a continuous timeline. After completing the Evening session, it loops to **Day 2, Day 3, and beyond** with evolving challenges.
+
+5.	**Game Over State:** You have a fixed time limit (60s). When the timer hits zero, a **"GAME OVER"** screen appears displaying your **Total Score** and a button to try again.
+
+6.	**UI Controls:** Use the toggle button in the top-left corner to switch between **Dark Mode** and **Light Mode** map themes for better visibility.
+
+
 
 
 
