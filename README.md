@@ -80,7 +80,11 @@ The layout is designed to be intuitive, prioritizing the map interface.
 
 
 
+🚀 Play Live Demo
 
+Click Here to Play “NYC Geo-Predictor: Taxi Challenge”  : 
+
+https://gmt-458-web-gis.github.io/geogame-melisaburgu/
 
 
 
